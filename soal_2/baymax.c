@@ -12,6 +12,7 @@
 #include <unistd.h>
 
 char *fullpath(const char *path, const char *base);
+void logger(const char *message, int withNl, int withTime);
 
 static int xmp_getattr(const char *path, struct stat *stbuf);
 static int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi);
@@ -54,6 +55,30 @@ char *fullpath(const char *path, const char *base) {
     free(cwd);
 
     return full_path;
+}
+
+void logger(const char *message, int withNl, int withTime) {
+    FILE *fp = fopen("activity.log", "a");
+    if (fp == NULL) return;
+    char time_str[32];
+    if (withTime) {
+        time_t now = time(NULL);
+        struct tm *tm_info = localtime(&now);
+        strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S", tm_info);
+
+        if (withNl) {
+            fprintf(fp, "[%s] %s\n", time_str, message);
+        } else {
+            fprintf(fp, "[%s] %s", time_str, message);
+        }
+    } else {
+        if (withNl) {
+            fprintf(fp, "%s\n", message);
+        } else {
+            fprintf(fp, "%s", message);
+        }
+    }
+    fclose(fp);
 }
 
 static int xmp_getattr(const char *path, struct stat *stbuf) {
@@ -164,6 +189,12 @@ static int xmp_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 }
 
 static int xmp_write(const char *path, const char *buf, size_t size, off_t offset, struct fuse_file_info *fi) {
+    if (offset <= 0) {
+        char message[512];
+        snprintf(message, sizeof(message), "WRITE: %s", path + 1);
+        logger(message, 0, 1);
+    }
+
     const char *filename = strrchr(path, '/');
     if (filename == NULL)
         filename = path;
@@ -187,6 +218,10 @@ static int xmp_write(const char *path, const char *buf, size_t size, off_t offse
 
         FILE *fragment = fopen(fpath, "r+b");
         if (!fragment) {
+            char message[512];
+            sprintf(message, " %s", fragment_name);
+            logger(message, 0, 0);
+
             fragment = fopen(fpath, "w+b");
             if (!fragment) {
                 free(fpath);
@@ -209,10 +244,17 @@ static int xmp_write(const char *path, const char *buf, size_t size, off_t offse
 
 static int xmp_release(const char *path, struct fuse_file_info *fi) {
     char *fpath = fullpath(path, BASE_FOLDER);
+    struct stat st;
+    if (stat(fpath, &st) == -1) {
+        free(fpath);
+        return 0;
+    }
+
     if (remove(fpath) == -1) {
         free(fpath);
         return -errno;
     }
+    logger("", 1, 0);
     free(fpath);
     return 0;
 }
@@ -221,6 +263,10 @@ static int compare_fragments(const void *a, const void *b) {
     return strcmp(*(const char **)a, *(const char **)b);
 }
 static int xmp_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi) {
+    char message[512];
+    snprintf(message, sizeof(message), "READ: %s", path + 1);
+    logger(message, 1, 1);
+
     DIR *dp = opendir(fullpath("/", BASE_FOLDER));
     if (dp == NULL) return -errno;
 
@@ -303,6 +349,9 @@ static int xmp_unlink(const char *path) {
     struct dirent *de;
     int deleted_any = 0;
 
+    char message[2048];
+    snprintf(message, sizeof(message), "DELETE: %s -> ", path + 1);
+
     while ((de = readdir(dp)) != NULL) {
         if (strncmp(de->d_name, filename, strlen(filename)) != 0) continue;
 
@@ -311,6 +360,7 @@ static int xmp_unlink(const char *path) {
 
         if (!isdigit(after[1]) || !isdigit(after[2]) || !isdigit(after[3])) continue;
 
+        snprintf(message + strlen(message), sizeof(message) - strlen(message), "%s ", de->d_name);
         char *fpath = fullpath(de->d_name, BASE_FOLDER);
         if (unlink(fpath) == -1) {
             free(fpath);
@@ -324,5 +374,8 @@ static int xmp_unlink(const char *path) {
 
     closedir(dp);
     if (!deleted_any) return -ENOENT;
+
+    logger(message, 1, 1);
+
     return 0;
 }
