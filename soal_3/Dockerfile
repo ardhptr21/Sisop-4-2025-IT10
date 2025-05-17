@@ -1,15 +1,13 @@
-FROM ubuntu:latest
+FROM ubuntu:22.04
 
-FROM ubuntu:20.04
+RUN apt update && \
+    apt install -y libfuse* pkg-config gcc
 
-RUN apt-get update && \
-    DEBIAN_FRONTEND=noninteractive apt-get install -y \
-    fuse gcc make && \
-    mkdir -p /app
+COPY ./antink.c /antink.c
 
-COPY antink.c /app/
-WORKDIR /app
+RUN gcc -Wall /antink.c $(pkg-config fuse --cflags --libs) -o /antink && \
+    chmod +x /antink
 
-RUN gcc -Wall antink.c `pkg-config fuse --cflags --libs` -o antink
+RUN mkdir -p /antink_mount
 
-CMD ["./antink", "/antink_mount"]
+CMD /antink -f /antink_mount

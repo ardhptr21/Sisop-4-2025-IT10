@@ -1,20 +1,27 @@
-version: "3"
-
 services:
   antink-server:
-    build: .
-    privileged: true
+    container_name: antink-server
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
     volumes:
-      - ./it24_host:/app/it24_host         
-      - ./antink-logs:/app/antink-logs     
-      - antink_mount:/antink_mount         
-    command: ["./antink", "/antink_mount"]
+      - ./it24_host:/it24_host
+      - ./antink-logs/:/var/log/
+      - /dev/fuse:/dev/fuse
+    cap_add:
+      - SYS_ADMIN
+    security_opt:
+      - apparmor:unconfined
+    privileged: true
 
   antink-logger:
-    image: busybox
+    container_name: antink-logger
+    image: busybox:latest
+    restart: unless-stopped
+    depends_on:
+      - antink-server
     volumes:
-      - ./antink-logs:/app/antink-logs
-    command: ["sh", "-c", "tail -f /app/antink-logs/it24.log"]
-
-volumes:
-  antink_mount:
+      - ./antink-logs/:/var/log/
+    command: >
+      sh -c "touch /var/log/it24.log && tail -f /var/log/it24.log"
