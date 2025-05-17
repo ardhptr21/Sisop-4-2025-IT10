@@ -1,24 +1,28 @@
+#define _DEFAULT_SOURCE
 #define FUSE_USE_VERSION 28
-#include <fuse.h>
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <fcntl.h>
+
 #include <dirent.h>
 #include <errno.h>
+#include <fcntl.h>
+#include <fuse.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sys/time.h>
+#include <unistd.h>
 #include <zip.h>
 
+char *fullpath(const char *path, const char *base);
 void write_log(const char *filename_txt, const char *filename_img);
+void extract_zip(const char *zip_path);
+void convert_file(char *folder, char *target);
+unsigned char hex_char_to_val(char c);
+unsigned char *hex_to_bytes(const char *hex, size_t *out_len);
 
-static void* xmp_init(struct fuse_conn_info *conn);
+static void *xmp_init(struct fuse_conn_info *conn);
 static int xmp_getattr(const char *path, struct stat *stbuf);
 static int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi);
-static int xmp_open(const char *path, struct fuse_file_info *fi);
 static int xmp_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi);
-static int convert_hex(const char *txt_path, char **buffer, size_t *buffer_size);
-static int xmp_unlink(const char *path);
 
 struct zip *zip_archive;
 
@@ -26,165 +30,15 @@ static struct fuse_operations xmp_oper = {
     .init = xmp_init,
     .getattr = xmp_getattr,
     .readdir = xmp_readdir,
-    .open = xmp_open,
     .read = xmp_read,
-    .unlink = xmp_unlink,
 };
+
+#define BASE_FOLDER "anomali"
 
 int main(int argc, char *argv[]) {
     umask(0);
     return fuse_main(argc, argv, &xmp_oper, NULL);
 }
-
-static void* xmp_init(struct fuse_conn_info *conn) {
-    zip_archive = zip_open("anomali.zip", 0, NULL);
-    printf("halo");
-    if (!zip_archive) {
-        fprintf(stderr, "Failed to open zip\n");
-        exit(1);
-    }
-    return NULL;
-}
-
-static int xmp_getattr(const char *path, struct stat *stbuf) {
-    memset(stbuf, 0, sizeof(struct stat));
-    if (strcmp(path, "/") == 0) {
-        stbuf->st_mode = S_IFDIR | 0755;
-        stbuf->st_nlink = 2;
-        return 0;
-    }
-
-    const char *filename = path + 1;  
-    struct zip_stat zs;
-    if (zip_stat(zip_archive, filename, 0, &zs) == 0) {
-        stbuf->st_mode = S_IFREG | 0444;
-        stbuf->st_nlink = 1;
-        stbuf->st_size = zs.size;
-        return 0;
-    }
-     return -ENOENT;
-}
-
-static int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi)
-{
-  if (strcmp(path, "/") != 0)
-        return -ENOENT;
-
-    filler(buf, ".", NULL, 0);
-    filler(buf, "..", NULL, 0);
-
-    zip_int64_t count = zip_get_num_entries(zip_archive, 0);
-    for (zip_uint64_t i = 0; i < count; ++i) {
-        const char *name = zip_get_name(zip_archive, i, 0);
-        filler(buf, name, NULL, 0);
-    }
-    return 0;
-}
-
-static int xmp_open(const char *path, struct fuse_file_info *fi) {
-    const char *filename = path + 1;
-    struct zip_stat zs;
-    if (zip_stat(zip_archive, filename, 0, &zs) != 0)
-    return -ENOENT;
-
-    return 0;
-}
-
-static int xmp_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi) {
-    const char *filename = path + 1;
-
-     if (strstr(filename, ".txt")) {
-        char *img_buffer;
-        size_t img_size;
-
-        if (convert_hex(filename, &img_buffer, &img_size) == 0) {
-            struct stat st = {0};
-            if (stat("image", &st) == -1) {
-                mkdir("image", 0755);
-            }
-
-            time_t now = time(NULL);
-            struct tm *t = localtime(&now);
-            char image_filename[256];
-
-            snprintf(image_filename, sizeof(image_filename),
-                "image/%.*s_image_%04d-%02d-%02d_%02d:%02d:%02d.png",
-                (int)(strlen(filename)-4), filename,
-                t->tm_year + 1900, t->tm_mon + 1, t->tm_mday,
-                t->tm_hour, t->tm_min, t->tm_sec);
-
-            FILE *img_fp = fopen(image_filename, "wb");
-            if (img_fp) {
-                fwrite(img_buffer, 1, img_size, img_fp);
-                fclose(img_fp);
-
-                write_log(filename, image_filename);
-                free(img_buffer);
-            }
-        }
-    }
-
-    struct zip_file *zf = zip_fopen(zip_archive, filename, 0);
-    if (!zf) return -ENOENT;
-
-    if (offset > 0) {
-    char dump[offset];
-    zip_fread(zf, dump, offset);
-    }
-
-    int bytes_read = zip_fread(zf, buf, size);
-    zip_fclose(zf);
-    return bytes_read;
-}                  
-
-static int xmp_unlink(const char *path) {
-    const char *filename = path + 1;
-
-    if(strstr(filename, ".zip")) {
-     if (remove(filename) == 0) {
-          return 0;
-        } else {
-          return -errno;
-     }
-   }
-    return -EPERM;
-} 
-
-static int convert_hex(const char *txt_path, char **buffer, size_t *buffer_size) {
-    struct zip_file *zf = zip_fopen(zip_archive, txt_path, 0);
-    if (!zf) {
-      return -1;
-    }
-
-    struct zip_stat zs;
-    zip_stat(zip_archive, txt_path, 0, &zs);
-    if (zip_stat(zip_archive, txt_path, 0, &zs) != 0) {
-      return -1;
-    }
-
-    char *hex_str = malloc(zs.size + 1);
-    zip_fread(zf, hex_str, zs.size);
-    hex_str[zs.size] = '\0';
-    zip_fclose(zf);
-
-    size_t byte_len = strlen(hex_str) / 2;
-    unsigned char *img_data = malloc(byte_len);
-    if (!img_data) {
-        free(hex_str);
-        return -1;
-    }
-
-    for (size_t i = 0; i < byte_len; i++) {
-        char byte_pair[3] = {hex_str[2*i], hex_str[2*i+1], '\0'};
-        img_data[i] = (unsigned char) strtol(byte_pair, NULL, 16);
-    }
-
-    *buffer = (char *)img_data;
-    *buffer_size = byte_len;
-
-    free(hex_str);
-    return 0;
-} 
 
 void write_log(const char *filename_txt, const char *filename_img) {
     FILE *log = fopen("conversion.log", "a");
@@ -196,10 +50,224 @@ void write_log(const char *filename_txt, const char *filename_img) {
     char time[16];
 
     strftime(date, sizeof(date), "%Y-%m-%d", t);
-    strftime(time, sizeof(time), "%H:%M:%S", t); 
+    strftime(time, sizeof(time), "%H:%M:%S", t);
 
-    fprintf(log, "[%s][%s]: Successfully converted hexadecimal text %s to %s.\n", 
+    fprintf(log, "[%s][%s]: Successfully converted hexadecimal text %s to %s.\n",
             date, time, filename_txt, filename_img);
 
     fclose(log);
+}
+
+char *fullpath(const char *path, const char *base) {
+    char *cwd = getcwd(NULL, 0);
+    if (cwd == NULL) return NULL;
+
+    char *full_path = malloc(strlen(cwd) + strlen(base) + strlen(path) + 3);
+    if (full_path == NULL) {
+        free(cwd);
+        return NULL;
+    }
+
+    sprintf(full_path, "%s/%s/%s", cwd, base, path[0] == '/' ? path + 1 : path);
+    free(cwd);
+
+    return full_path;
+}
+
+void extract_zip(const char *zip_path) {
+    int err = 0;
+    zip_t *zip = zip_open(zip_path, ZIP_RDONLY, &err);
+    if (!zip) {
+        fprintf(stderr, "Failed to open zip file: %s\n", zip_path);
+        return;
+    }
+
+    zip_int64_t n_entries = zip_get_num_entries(zip, 0);
+    for (zip_uint64_t i = 0; i < n_entries; i++) {
+        const char *entry_name = zip_get_name(zip, i, 0);
+        if (!entry_name) continue;
+
+        if (entry_name[strlen(entry_name) - 1] == '/') {
+            mkdir(entry_name, 0755);
+            continue;
+        }
+
+        char cmd[1024];
+        snprintf(cmd, sizeof(cmd), "mkdir -p \"$(dirname \"%s\")\"", entry_name);
+        system(cmd);
+
+        zip_file_t *zf = zip_fopen_index(zip, i, 0);
+        if (!zf) continue;
+
+        FILE *fout = fopen(entry_name, "wb");
+        if (!fout) {
+            zip_fclose(zf);
+            continue;
+        }
+
+        char buffer[4096];
+        zip_int64_t n;
+        while ((n = zip_fread(zf, buffer, sizeof(buffer))) > 0) {
+            fwrite(buffer, 1, n, fout);
+        }
+
+        fclose(fout);
+        zip_fclose(zf);
+    }
+
+    zip_close(zip);
+}
+
+unsigned char hex_char_to_val(char c) {
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    return 0;
+}
+
+unsigned char *hex_to_bytes(const char *hex, size_t *out_len) {
+    size_t len = strlen(hex);
+    *out_len = len / 2;
+    unsigned char *buf = malloc(*out_len);
+    for (size_t i = 0; i < *out_len; i++) {
+        buf[i] = (hex_char_to_val(hex[2 * i]) << 4) | hex_char_to_val(hex[2 * i + 1]);
+    }
+    return buf;
+}
+
+void convert_file(char *folder, char *target) {
+    struct stat st;
+    if (stat(target, &st) == -1) {
+        mkdir(target, 0755);
+    }
+
+    DIR *dir = opendir(folder);
+    if (!dir) return;
+
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL) {
+        if (entry->d_type != DT_REG) continue;
+
+        char *filename = entry->d_name;
+        char *ext = strrchr(filename, '.');
+        if (!ext || strcmp(ext, ".txt") != 0) continue;
+
+        size_t src_len = strlen(folder) + strlen(filename) + 2;
+        char *src_path = malloc(src_len);
+        snprintf(src_path, src_len, "%s/%s", folder, filename);
+
+        FILE *src = fopen(src_path, "r");
+        if (!src) {
+            free(src_path);
+            continue;
+        }
+
+        fseek(src, 0, SEEK_END);
+        long length = ftell(src);
+        rewind(src);
+
+        char *hex_buffer = malloc(length + 1);
+        fread(hex_buffer, 1, length, src);
+        hex_buffer[length] = '\0';
+        fclose(src);
+        free(src_path);
+
+        size_t binary_len;
+        unsigned char *binary = hex_to_bytes(hex_buffer, &binary_len);
+        free(hex_buffer);
+
+        time_t now = time(NULL);
+        struct tm *t = localtime(&now);
+        char timestamp[32];
+        strftime(timestamp, sizeof(timestamp), "%Y-%m-%d_%H:%M:%S", t);
+
+        size_t base_len = ext - filename;
+        char *base_name = malloc(base_len + 1);
+        strncpy(base_name, filename, base_len);
+        base_name[base_len] = '\0';
+
+        size_t newfile_len = base_len + strlen("_image_") + strlen(timestamp) + strlen(".png") + 1;
+        char *new_filename = malloc(newfile_len);
+        snprintf(new_filename, newfile_len, "%s_image_%s.png", base_name, timestamp);
+
+        size_t dest_len = strlen(target) + strlen(new_filename) + 2;
+        char *dest_path = malloc(dest_len);
+        snprintf(dest_path, dest_len, "%s/%s", target, new_filename);
+
+        FILE *dest = fopen(dest_path, "wb");
+        if (!dest) {
+            perror("Failed to open target file");
+            free(base_name);
+            free(new_filename);
+            free(dest_path);
+            free(binary);
+            continue;
+        }
+
+        fwrite(binary, 1, binary_len, dest);
+        fclose(dest);
+
+        write_log(entry->d_name, new_filename);
+
+        free(binary);
+        free(base_name);
+        free(new_filename);
+        free(dest_path);
+    }
+
+    closedir(dir);
+}
+
+static void *xmp_init(struct fuse_conn_info *conn) {
+    const char *zip_path = "anomali.zip";
+    extract_zip(zip_path);
+    convert_file("anomali", "anomali/image");
+    remove(zip_path);
+    return NULL;
+}
+
+static int xmp_getattr(const char *path, struct stat *stbuf) {
+    char *fpath = fullpath(path, BASE_FOLDER);
+    if (lstat(fpath, stbuf) == -1) {
+        free(fpath);
+        return -errno;
+    }
+    return 0;
+}
+
+static int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi) {
+    filler(buf, ".", NULL, 0);
+    filler(buf, "..", NULL, 0);
+
+    char *full_path = fullpath(path, BASE_FOLDER);
+    DIR *dp = opendir(full_path);
+    if (dp == NULL) {
+        free(full_path);
+        return -errno;
+    }
+
+    struct dirent *de;
+    while ((de = readdir(dp)) != NULL) {
+        if (strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0) continue;
+        if (filler(buf, de->d_name, NULL, 0)) break;
+    }
+    closedir(dp);
+    return 0;
+}
+
+static int xmp_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi) {
+    char *fpath = fullpath(path, BASE_FOLDER);
+    FILE *file = fopen(fpath, "rb");
+    if (!file) {
+        free(fpath);
+        return -errno;
+    }
+    fseek(file, offset, SEEK_SET);
+    size_t bytes_read = fread(buf, 1, size, file);
+    fclose(file);
+    free(fpath);
+    if (bytes_read == 0) return -EIO;
+    if (bytes_read < size) return bytes_read;
+
+    return bytes_read;
 }

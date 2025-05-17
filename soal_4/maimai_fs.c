@@ -175,7 +175,6 @@ int gzip_compress(const unsigned char *in, size_t in_len, unsigned char **out, s
     strm.zfree = Z_NULL;
     strm.opaque = Z_NULL;
 
-    // Use deflateInit2 to enable gzip header (windowBits = 16 + MAX_WBITS)
     ret = deflateInit2(&strm, Z_DEFAULT_COMPRESSION, Z_DEFLATED,
                        MAX_WBITS + 16, 8, Z_DEFAULT_STRATEGY);
     if (ret != Z_OK) {
