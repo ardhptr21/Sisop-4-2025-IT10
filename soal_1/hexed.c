@@ -37,7 +37,7 @@ int main(int argc, char *argv[]) {
 }
 
 static void* xmp_init(struct fuse_conn_info *conn) {
-    zip_archive = zip_open("/Praktikum_Sisop/Modul_4-Soal_1/anomali.zip", 0, NULL);
+    zip_archive = zip_open("anomali.zip", 0, NULL);
     printf("halo");
     if (!zip_archive) {
         fprintf(stderr, "Failed to open zip\n");
