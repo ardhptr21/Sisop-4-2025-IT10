@@ -1,18 +1,15 @@
 FROM ubuntu:latest
 
-RUN apt-get update && apt-get install -y \
-    gcc \
-    make \
-    pkg-config \
-    libfuse-dev \
-    fuse
+FROM ubuntu:20.04
 
+RUN apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y \
+    fuse gcc make && \
+    mkdir -p /app
+
+COPY antink.c /app/
 WORKDIR /app
-COPY antink.c .
 
-RUN gcc -Wall `pkg-config fuse --cflags` antink.c -o antink `pkg-config fuse --libs`
+RUN gcc -Wall antink.c `pkg-config fuse --cflags --libs` -o antink
 
-RUN mkdir -p /app/antink_mount && chmod 777 /app/antink_mount
-
-ENTRYPOINT ["./antink"]
-CMD ["/app/antink_mount", "-f"]
+CMD ["./antink", "/antink_mount"]

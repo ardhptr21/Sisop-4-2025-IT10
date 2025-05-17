@@ -1,27 +1,20 @@
-version: '3'
+version: "3"
 
 services:
   antink-server:
     build: .
-    volumes:
-      - ./it24_host:/app/it24_host:ro
-      - ./antink_mount:/app/antink_mount
-      - ./antink-logs:/app/antink-logs
-    devices:
-      - /dev/fuse:/dev/fuse
-    cap_add:
-      - SYS_ADMIN
-    security_opt:
-      - apparmor:unconfined
     privileged: true
-  
+    volumes:
+      - ./it24_host:/app/it24_host         
+      - ./antink-logs:/app/antink-logs     
+      - antink_mount:/antink_mount         
+    command: ["./antink", "/antink_mount"]
+
   antink-logger:
-    image: ubuntu:latest
+    image: busybox
     volumes:
       - ./antink-logs:/app/antink-logs
-    command: /bin/bash -c "touch /app/antink-logs/it24.log && tail -f /app/antink-logs/it24.log"
-    depends_on:
-      - antink-server
+    command: ["sh", "-c", "tail -f /app/antink-logs/it24.log"]
 
 volumes:
   antink_mount:
