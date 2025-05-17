@@ -285,7 +285,23 @@ int gzip_decompress(const unsigned char *in, size_t in_len, unsigned char **out,
 
 static int xmp_getattr(const char *path, struct stat *stbuf) {
     int res;
-    char *map_path = mappath(path);
+    char target[PATH_MAX];
+
+    if (strncmp(path, "/7sref/", 7) == 0) {
+        char *underscore = strchr(path + 7, '_');
+        if (underscore != NULL) {
+            size_t len = underscore - path - 6;
+            strncpy(target, path + 6, len);
+            target[len] = '\0';
+            strcat(target, "/");
+            strcat(target, path + strlen(path) - strlen(underscore) + 1);
+        } else {
+            strcpy(target, path);
+        }
+    } else {
+        strcpy(target, path);
+    }
+    char *map_path = mappath(target);
 
     res = lstat(map_path, stbuf);
     if (res == -1) {
@@ -430,7 +446,24 @@ static int xmp_release(const char *path, struct fuse_file_info *fi) {
 };
 
 static int xmp_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi) {
-    char *fpath = mappath(path);
+    char target[PATH_MAX];
+
+    if (strncmp(path, "/7sref/", 7) == 0) {
+        char *underscore = strchr(path + 7, '_');
+        if (underscore != NULL) {
+            size_t len = underscore - path - 6;
+            strncpy(target, path + 6, len);
+            target[len] = '\0';
+            strcat(target, "/");
+            strcat(target, path + strlen(path) - strlen(underscore) + 1);
+        } else {
+            strcpy(target, path);
+        }
+    } else {
+        strcpy(target, path);
+    }
+
+    char *fpath = mappath(target);
     FILE *file = fopen(fpath, "rb");
     if (!file) {
         free(fpath);
@@ -439,11 +472,11 @@ static int xmp_read(const char *path, char *buf, size_t size, off_t offset, stru
     fseek(file, offset, SEEK_SET);
     size_t bytes_read = fread(buf, 1, size, file);
 
-    if (strncmp(path, "/metro/", 7) == 0) {
+    if (strncmp(target, "/metro/", 7) == 0) {
         for (size_t i = 0; i < bytes_read; i++) {
             buf[i] = (unsigned char)(buf[i] - (i % 256));
         }
-    } else if (strncmp(path, "/dragon/", 8) == 0) {
+    } else if (strncmp(target, "/dragon/", 8) == 0) {
         for (size_t i = 0; i < bytes_read; i++) {
             if (buf[i] >= 'a' && buf[i] <= 'z') {
                 buf[i] = (buf[i] - 'a' + 13) % 26 + 'a';
@@ -451,7 +484,7 @@ static int xmp_read(const char *path, char *buf, size_t size, off_t offset, stru
                 buf[i] = (buf[i] - 'A' + 13) % 26 + 'A';
             }
         }
-    } else if (strncmp(path, "/heaven/", 8) == 0) {
+    } else if (strncmp(target, "/heaven/", 8) == 0) {
         off_t aligned_offset = offset - (offset % AES_BLOCK_SIZE);
         size_t read_len = size + (offset - aligned_offset) + AES_BLOCK_SIZE;
 
@@ -555,7 +588,24 @@ static int xmp_read(const char *path, char *buf, size_t size, off_t offset, stru
 }
 
 static int xmp_unlink(const char *path) {
-    char *fpath = mappath(path);
+    char target[PATH_MAX];
+
+    if (strncmp(path, "/7sref/", 7) == 0) {
+        char *underscore = strchr(path + 7, '_');
+        if (underscore != NULL) {
+            size_t len = underscore - path - 6;
+            strncpy(target, path + 6, len);
+            target[len] = '\0';
+            strcat(target, "/");
+            strcat(target, path + strlen(path) - strlen(underscore) + 1);
+        } else {
+            strcpy(target, path);
+        }
+    } else {
+        strcpy(target, path);
+    }
+
+    char *fpath = mappath(target);
     struct stat st;
     if (stat(fpath, &st) == -1) {
         free(fpath);
@@ -572,6 +622,53 @@ static int xmp_unlink(const char *path) {
 static int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi) {
     filler(buf, ".", NULL, 0);
     filler(buf, "..", NULL, 0);
+
+    if (strcmp(path, "/7sref") == 0) {
+        char *subdirs[] = {"starter", "metro", "dragon", "blackrose", "heaven", "skystreet"};
+        for (int i = 0; i < sizeof(subdirs) / sizeof(subdirs[0]); i++) {
+            char *subdirfpath = fullpath(subdirs[i], BASE_FOLDER);
+            DIR *dp = opendir(subdirfpath);
+            if (dp == NULL) {
+                free(subdirfpath);
+                continue;
+            }
+
+            struct dirent *de;
+            while ((de = readdir(dp)) != NULL) {
+                if (strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0) continue;
+                char *dot = strrchr(de->d_name, '.');
+                if (dot != NULL) {
+                    size_t new_len = dot - de->d_name;
+                    char *modified = strndup(de->d_name, new_len);
+                    if (modified == NULL) {
+                        closedir(dp);
+                        free(subdirfpath);
+                        return -ENOMEM;
+                    }
+                    char prefix[PATH_MAX];
+                    sprintf(prefix, "%s_%s", subdirs[i], modified);
+                    if (filler(buf, prefix, NULL, 0) != 0) {
+                        free(modified);
+                        closedir(dp);
+                        free(subdirfpath);
+                        return -ENOMEM;
+                    }
+                    free(modified);
+                } else {
+                    if (filler(buf, de->d_name, NULL, 0) != 0) {
+                        closedir(dp);
+                        free(subdirfpath);
+                        return -ENOMEM;
+                    }
+                }
+            }
+            closedir(dp);
+            free(subdirfpath);
+        }
+
+        return 0;
+    }
+
     char *fpath = fullpath(path, BASE_FOLDER);
     DIR *dp = opendir(fpath);
     if (dp == NULL) {
