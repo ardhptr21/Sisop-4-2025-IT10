@@ -7,6 +7,7 @@
 #include <fuse.h>
 #include <openssl/evp.h>
 #include <openssl/rand.h>
+#include <openssl/sha.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -15,6 +16,7 @@
 
 char *fullpath(const char *path, const char *base);
 char *mappath(const char *path);
+void iv_from_filename(const char *filepath, unsigned char iv[16]);
 int aes256_cbc_encrypt(const unsigned char *plaintext, int plaintext_len, const unsigned char *key, const unsigned char *iv, unsigned char **ciphertext);
 int aes256_cbc_decrypt(const unsigned char *ciphertext, int ciphertext_len, const unsigned char *key, const unsigned char *iv, unsigned char **plaintext);
 int gzip_compress(const unsigned char *in, size_t in_len, unsigned char **out, size_t *out_len);
@@ -39,12 +41,10 @@ struct fuse_operations xmp_oper = {
 };
 
 #define BASE_FOLDER "chiho"
-#define AES_KEY_SIZE 32
+#define AES_KEY_SIZE 34
 #define AES_BLOCK_SIZE 16
-#define CHUNK 16384
 
-const unsigned char AES_KEY[AES_KEY_SIZE] = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-const unsigned char AES_IV[AES_BLOCK_SIZE] = "bbbbbbbbbbbbbbbb";
+const unsigned char AES_KEY[AES_KEY_SIZE] = "SopSopSopSisopAnomaliSistemOperasi";
 
 int main(int argc, char *argv[]) {
     umask(0);
@@ -87,6 +87,12 @@ char *mappath(const char *path) {
     }
 
     return fullpath(target, BASE_FOLDER);
+}
+
+void iv_from_filename(const char *filepath, unsigned char iv[16]) {
+    unsigned char hash[SHA256_DIGEST_LENGTH];
+    SHA256((unsigned char *)filepath, strlen(filepath), hash);
+    memcpy(iv, hash, 16);
 }
 
 int aes256_cbc_encrypt(const unsigned char *plaintext, int plaintext_len, const unsigned char *key, const unsigned char *iv, unsigned char **ciphertext) {
@@ -381,8 +387,11 @@ static int xmp_write(const char *path, const char *buf, size_t size, off_t offse
         written = fwrite(encoded, 1, size, file);
         free(encoded);
     } else if (strncmp(path, "/heaven/", 8) == 0) {
+        unsigned char iv[16];
+        iv_from_filename(path, iv);
+
         unsigned char *ciphertext = NULL;
-        int ciphertext_len = aes256_cbc_encrypt((unsigned char *)buf, (int)size, AES_KEY, AES_IV, &ciphertext);
+        int ciphertext_len = aes256_cbc_encrypt((unsigned char *)buf, (int)size, AES_KEY, iv, &ciphertext);
         if (ciphertext_len < 0) {
             fclose(file);
             free(fpath);
@@ -485,6 +494,9 @@ static int xmp_read(const char *path, char *buf, size_t size, off_t offset, stru
             }
         }
     } else if (strncmp(target, "/heaven/", 8) == 0) {
+        unsigned char iv[16];
+        iv_from_filename(path, iv);
+
         off_t aligned_offset = offset - (offset % AES_BLOCK_SIZE);
         size_t read_len = size + (offset - aligned_offset) + AES_BLOCK_SIZE;
 
@@ -511,7 +523,7 @@ static int xmp_read(const char *path, char *buf, size_t size, off_t offset, stru
         }
 
         unsigned char *plaintext = NULL;
-        int plaintext_len = aes256_cbc_decrypt(ciphertext, (int)bytes_read, AES_KEY, AES_IV, &plaintext);
+        int plaintext_len = aes256_cbc_decrypt(ciphertext, (int)bytes_read, AES_KEY, iv, &plaintext);
         if (plaintext_len < 0) {
             free(ciphertext);
             return -EIO;
