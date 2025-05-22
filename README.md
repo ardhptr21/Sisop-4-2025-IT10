@@ -10,14 +10,16 @@
 
 ## Reporting
 
-Soal 1
+### Soal 1
+
 **Dikerjakan oleh: Aslam Ahmad Usman (5027241074)**
 
 **Penjelasan**
 
 **Output**
 
-Soal 2
+### Soal 2
+
 **Dikerjakan oleh: Ardhi Putra Pradana (5027241022)**
 
 **Penjelasan**
@@ -467,14 +469,16 @@ Function diatas digunakan untuk melakukan logging ke file **activity.log**, dima
 
 ![alt text](assets/soal_2/logging.png)
 
-Soal 3
+### Soal 3
+
 **Dikerjakan oleh: Kanafira Vanesha Putri (5027241010)**
 
 **Penjelasan**
 
 **Output**
 
-Soal 4
+### Soal 4
+
 **Dikerjakan oleh: Ardhi Putra Pradana (5027241022)**
 
 **Penjelasan**
