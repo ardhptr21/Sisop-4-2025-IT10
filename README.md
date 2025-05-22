@@ -480,3 +480,36 @@ Soal 4
 **Penjelasan**
 
 **Output**
+
+1. Struktur awal ketika fuse dijalankan
+
+![alt text](assets/soal_4/fuse_started.png)
+
+2. Handler untuk folder **starter**
+
+![alt text](assets/soal_4/starter.png)
+
+3. Handler untuk folder **metro**
+
+![alt text](assets/soal_4/metro.png)
+
+4. Handler untuk folder **dragon**
+
+![alt text](assets/soal_4/dragon.png)
+
+5. Handler untuk folder **blackrose**
+
+![alt text](assets/soal_4/blackrose.png)
+![alt text](assets/soal_4/bin_proof.png)
+
+6. Handler untuk folder **heaven**
+
+![alt text](assets/soal_4/heaven.png)
+
+7. Handler untuk folder **skystreet**
+
+![alt text](assets/soal_4/skystreet.png)
+
+8. Handler untuk folder **7sref**
+
+![alt text](assets/soal_4/7sref.png)
