@@ -35,6 +35,7 @@ int main(int argc, char *argv[]) {
 ```
 
 
+
 **a. Mengambil file txt dalam file zip anomali dan menghapus file zip-nya setelah di-unzip**
 
 
@@ -89,6 +90,7 @@ void extract_zip(const char *zip_path) {
 File zip lalu akan dihapus setelah file txt sudah di-extract dengan `remove(zip_path);`.
 
 Operation init sendiri nanti akan menginisialisasikan file zip anomali dan memanggil fungsi `extract_zip` untuk mengekstrak file zip dan mengonversi file teks hasil extract dengan `convert_file`, lalu menghapus file zip setelah selesai. 
+
 
 
 **b. Mengubah string hexadecimal ke file image ketika file text dibuka dan diletakkan ke direktori “image”**
@@ -181,7 +183,7 @@ void convert_file(char *folder, char *target) {
 
 ```
 
-Lalu fungsi `hex_char_to_val()` mengubah  1 karakter heksadesimal menjadi nilai aslinya: Mekanisme kerjanya yaitu bilangan angka akan dikurangi 0 (‘5’ - 0 = 5 yang merupakan 54 - 48 dalam ASCII ), dan huruf kapital dan kecil akan ditambah 10 (‘A’ - ‘A’ + 10 = 10 dimana ‘A’ sendiri adalah 65 dalam ASCII).
+Lalu fungsi `hex_char_to_val()` mengubah  1 karakter heksadesimal menjadi nilai aslinya. Mekanisme kerjanya yaitu bilangan angka akan dikurangi 0 (‘5’ - 0 = 5 yang merupakan 54 - 48 dalam ASCII ) dan huruf kapital dan kecil akan ditambah 10 (‘A’ - ‘A’ + 10 = 10 dimana ‘A’ sendiri adalah 65 dalam ASCII).
 
 ```c
 unsigned char hex_char_to_val(char c) {
@@ -207,6 +209,7 @@ unsigned char *hex_to_bytes(const char *hex, size_t *out_len) {
 ```
 
 
+
 **c. Merubah nama file hasil konversi dari string ke image**
 
 Perubahan nama file dilakukan dalam fungsi `convert_file()`:
@@ -215,6 +218,7 @@ Perubahan nama file dilakukan dalam fungsi `convert_file()`:
 strftime(timestamp, sizeof(timestamp), "%Y-%m-%d_%H:%M:%S", t);
 snprintf(new_filename, newfile_len, "%s_image_%s.png", base_name, timestamp);
 ```
+
 
 
 **d. Mencatat hasil konversi file ke dalam conversion.log**
@@ -250,6 +254,7 @@ void write_log(const char *filename_txt, const char *filename_img) {
 Selain operasi init yang digunakan untuk menjalankan sebagian besar operasi di soal, terdapat beberapa operasi FUSE lain yang dipakai agar filesystem dapat berjalan:
 
 
+
 **1. Operasi getattr**
 
 `xmp_getattr` digunakan untuk mengambil atribut file dalam folder, seperti ukuran, waktu akses, dan tipe file. Operasi getattr akan membentuk path lengkap menggunakan fungsi fullpath dan mengambil isi atribut file dengan `lstat`.
@@ -264,6 +269,7 @@ static int xmp_getattr(const char *path, struct stat *stbuf) {
     return 0;
 }
 ```
+
 
 
 **2. Operasi readdir**
@@ -291,6 +297,7 @@ static int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_
     return 0;
 }
 ```
+
 
 
 **3. Operasi read**
