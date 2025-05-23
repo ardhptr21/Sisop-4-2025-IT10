@@ -937,8 +937,18 @@ void logger(const char *message) {
 Docker setup menggunakan:
 ```c
 FROM ubuntu:22.04
+
 RUN apt update && \
     apt install -y libfuse* pkg-config gcc
+
+COPY ./antink.c /antink.c
+
+RUN gcc -Wall /antink.c $(pkg-config fuse --cflags --libs) -o /antink && \
+    chmod +x /antink
+
+RUN mkdir -p /antink_mount
+
+CMD /antink -f /antink_mount
 ```
 
 Docker Compose Configuration:
@@ -949,9 +959,27 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    restart: unless-stopped
     volumes:
       - ./it24_host:/it24_host
       - ./antink-logs/:/var/log/
+      - /dev/fuse:/dev/fuse
+    cap_add:
+      - SYS_ADMIN
+    security_opt:
+      - apparmor:unconfined
+    privileged: true
+
+  antink-logger:
+    container_name: antink-logger
+    image: busybox:latest
+    restart: unless-stopped
+    depends_on:
+      - antink-server
+    volumes:
+      - ./antink-logs/:/var/log/
+    command: >
+      sh -c "touch /var/log/it24.log && tail -f /var/log/it24.log"
 ```
 
 **Output**
