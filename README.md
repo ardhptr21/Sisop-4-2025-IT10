@@ -848,7 +848,8 @@ int main(int argc, char *argv[]) {
 }
 ```
 
-b. **Main Helper Functions**
+b. **Path Functions** 
+Karena file sebenarnya berada di folder /it24_host, setiap path yang masuk dari FUSE perlu dikonversi menjadi path absolut ke direktori tersebut. Inilah yang dilakukan fungsi getpath:
 ```c
 char *getpath(const char *path) {
     char *fpath = malloc(strlen(BASE_FOLDER) + strlen(path) + 2);
@@ -861,7 +862,7 @@ char *getpath(const char *path) {
 3. **File Operation**`
 a. Membalik nama file yang mengandung "kimcun" atau "nafis"
 
-Pada fungsi readdir, setiap file dicek namanya (case insensitive) apakah mengandung substring "kimcun" atau "nafis". Jika iya, maka nama file tersebut dibalik menggunakan fungsi reverse_name, dan nama hasil reverse inilah yang ditampilkan di direktori mount. Log dicatat menggunakan logger:
+Fungsi xmp_readdir bertugas untuk menampilkan isi direktori. Setiap file dicek namanya (case insensitive) apakah mengandung substring "kimcun" atau "nafis". Jika iya, maka nama file tersebut dibalik menggunakan fungsi reverse_name, dan nama hasil reverse inilah yang ditampilkan di direktori mount. Log dicatat menggunakan logger:
 ```c
 char *reverse_name(const char *name) {
     int len = strlen(name);
@@ -874,8 +875,30 @@ char *reverse_name(const char *name) {
     return reversed_name;
 }
 ```
+Nama file akan diubah hanya di tampilan direktori. File asli tetap tidak diubah, sehingga saat dibuka, sistem perlu mengembalikan nama ke bentuk aslinya.
+
+Semua proses ini juga akan dicatat ke log:
+```c
+snprintf(message, sizeof(message), "[REVERSE] File %s has been reversed: %s", de->d_name, reversed_name);
+logger(message);
+
+```
+
 
 b. Membaca file dan melakukan ROT13 jika tidak berbahaya
+Pada fungsi xmp_read, pertama-tama sistem akan mendeteksi apakah nama file telah dibalik di direktori mount. Jika ya, maka sistem akan mengembalikannya ke bentuk asli untuk dibuka.
+```c
+char *last_slash = strrchr(path, '/');
+char *reversed_name = reverse_name(last_slash + 1);
+char *reversed_copy = strdup(reversed_name);
+strlwr(reversed_copy);
+```
+
+Jika nama asli file mengandung "kimcun" atau "nafis", maka file dianggap mencurigakan (berbahaya). Maka file akan dibuka tanpa enkripsi, dan log dicatat sebagai alert:
+```c
+snprintf(message, sizeof(message), "[ALERT] Anomaly detected kimcun in file: %s", path);
+logger(message);
+```
 
 Jika file tidak mengandung "kimcun" atau "nafis", maka isi file akan dibaca dan dienkripsi menggunakan ROT13 saat dibaca:
 ```c
@@ -888,13 +911,6 @@ if (should_rot) {
         }
     }
     logger("[ENCRYPT] File %s has been encrypted", path);
-}
-```
-Sebaliknya, jika file mengandung "kimcun"/"nafis", maka tidak dienkripsi dan log anomali dicatat:
-```c
-if (strstr(reversed_copy, "kimcun") || strstr(reversed_copy, "nafis")) {
-    snprintf(message, sizeof(message), "[ALERT] Anomaly detected kimcun in file: %s", path);
-    logger(message);
 }
 ```
 
@@ -938,11 +954,11 @@ services:
 
 **Output**
 
-1. Menjalankan FUSE menggunakan Docker dalam container terisolasi.
+1. Menjalankan FUSE menggunakan Docker dalam container terisolasi. Menunjukkan bahwa filesystem berjalan dalam container, tidak menyentuh host secara langsung.
 
 ![alt text](assets/soal_3/modul4_soal3_a.png)
 
-2. Membalikkan nama kimcun.txt dan nafis.txt dan mencatatatnya kedalam log.
+2. Nama kimcun.txt dan nafis.txt dan ditampilkan secara terbalik di folder mount dan dicatat ke log.
 
 ![alt text](assets/soal_3/modul4_soal3_b.png)
 
