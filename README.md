@@ -325,8 +325,32 @@ static int xmp_read(const char *path, char *buf, size_t size, off_t offset, stru
 ```
 
 
-
 **Output**
+
+
+**1. input untuk menjalankan hexed**
+
+![alt text](assets/soal_1/input_hexed.png)
+
+**2. folder mount yang menyimpan hasil konversi ke image**
+
+![alt text](assets/soal_1/folder_mount.png)
+
+Beberapa hasil konversi ke image:
+
+![alt text](assets/soal_1/contoh_image1.png)
+![alt text](assets/soal_1/contoh_image2.png)
+
+**3. Penamaan file setelah dikonversi**
+
+File double di sini disebabkan karena file di memory disimpan ke cache
+
+![alt text](assets/soal_1/penamaan_file.png)
+
+**4. waktu hasil konversi disimpan ke log**
+
+![alt text](assets/soal_1/conversion_log.png)
+
 
 ### Soal 2
 
