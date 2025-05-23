@@ -913,13 +913,23 @@ services:
 
 1. Menjalankan FUSE menggunakan Docker dalam container terisolasi.
 
+![alt text](assets/soal_3/modul4_soal3_a.png)
+
 2. Membalikkan nama kimcun.txt dan nafis.txt dan mencatatatnya kedalam log.
+
+![alt text](assets/soal_3/modul4_soal3_b.png)
 
 3. Melakukan enkripsi isi dari file teks normal menggunakan ROT13 saat dibaca, sedangkan file teks berbahaya tidak di enkripsi.
 
+![alt text](assets/soal_3/modul4_soal3_c.png)
+
 4. Mencatat semua aktivitas ke dalam log file /var/log/it24.log yang dimonitor secara real-time oleh container logger.
 
+![alt text](assets/soal_3/modul4_soal3_d.png)
+
 5. Perubahan hanya terjadi di container tidak berpengaruh ke host.
+
+![alt text](assets/soal_3/modul4_soal3_e.png)
 
 ### Soal 4
 
