@@ -829,6 +829,25 @@ static struct fuse_operations xmp_oper = {
     .read = xmp_read,
 };
 
+b. Struktur Dasar FUSE
+
+Program dimulai dengan mendefinisikan operasi dasar FUSE dalam struktur fuse_operations:
+```c
+static struct fuse_operations xmp_oper = {
+    .getattr = xmp_getattr,
+    .readdir = xmp_readdir,
+    .read = xmp_read,
+};
+```
+
+FUSE dijalankan melalui fungsi main:
+```c
+int main(int argc, char *argv[]) {
+    umask(0);
+    return fuse_main(argc, argv, &xmp_oper, NULL);
+}
+```
+
 b. **Main Helper Functions**
 ```c
 char *getpath(const char *path) {
@@ -837,10 +856,12 @@ char *getpath(const char *path) {
     sprintf(fpath, "%s/%s", BASE_FOLDER, path[0] == '/' ? path + 1 : path);
     return fpath;
 }
-```
+``
 
-Lalu ditambahkan function reverse name operation, function ini melakukan reverse pada nama file. Program mendeteksi file yang mengandung kata kunci "kimcun" atau "nafis" lalu nama file akan di-reverse. Lalu untuk yg file tidak berbahaya (selain kimcun dan nafis) isi file akan dienkripsi menggunakan ROT13
-c. **Reverse Name Operation**
+3. **File Operation**`
+a. Membalik nama file yang mengandung "kimcun" atau "nafis"
+
+Pada fungsi readdir, setiap file dicek namanya (case insensitive) apakah mengandung substring "kimcun" atau "nafis". Jika iya, maka nama file tersebut dibalik menggunakan fungsi reverse_name, dan nama hasil reverse inilah yang ditampilkan di direktori mount. Log dicatat menggunakan logger:
 ```c
 char *reverse_name(const char *name) {
     int len = strlen(name);
@@ -853,8 +874,33 @@ char *reverse_name(const char *name) {
     return reversed_name;
 }
 ```
-Lalu pada soal juga diminta untuk menambahkan logging system sehingga ditambahkan function logging system. Dimana system logging dengan timestamp untuk tracking operasi filesystem. Setiap operasi pada file dicatat dalam log.
-d. **Logging System**
+
+b. Membaca file dan melakukan ROT13 jika tidak berbahaya
+
+Jika file tidak mengandung "kimcun" atau "nafis", maka isi file akan dibaca dan dienkripsi menggunakan ROT13 saat dibaca:
+```c
+if (should_rot) {
+    for (size_t i = 0; i < bytes_read; i++) {
+        if (buf[i] >= 'a' && buf[i] <= 'z') {
+            buf[i] = (buf[i] - 'a' + 13) % 26 + 'a';
+        } else if (buf[i] >= 'A' && buf[i] <= 'Z') {
+            buf[i] = (buf[i] - 'A' + 13) % 26 + 'A';
+        }
+    }
+    logger("[ENCRYPT] File %s has been encrypted", path);
+}
+```
+Sebaliknya, jika file mengandung "kimcun"/"nafis", maka tidak dienkripsi dan log anomali dicatat:
+```c
+if (strstr(reversed_copy, "kimcun") || strstr(reversed_copy, "nafis")) {
+    snprintf(message, sizeof(message), "[ALERT] Anomaly detected kimcun in file: %s", path);
+    logger(message);
+}
+```
+
+c. Logging aktivitas filesystem ke /var/log/it24.log
+
+Fungsi logger mencatat setiap aksi penting dengan timestamp untuk tracking operasi filesystem. Setiap operasi pada file dicatat dalam log. Log yang dicatat termasuk: File yang dibalik namanya, File yang dibaca dan dienkripsi, File mencurigakan yang mengandung keyword tertentu
 ```c
 void logger(const char *message) {
     FILE *fp = fopen(LOG_FILE, "a");
@@ -868,26 +914,7 @@ void logger(const char *message) {
 }
 ```
 
-3. File Operations
-
-a. File Encryption
-
-Menggunakan ROT13 untuk file yang mengandung "kimcun" atau "nafis"
-
-Implementasi pada fungsi read:
-```c
-if (buf[i] >= 'a' && buf[i] <= 'z') {
-    buf[i] = (buf[i] - 'a' + 13) % 26 + 'a';
-} else if (buf[i] >= 'A' && buf[i] <= 'Z') {
-    buf[i] = (buf[i] - 'A' + 13) % 26 + 'A';
-}
-```
-
-b. File Name Reversing
-
-Membalik nama file yang mengandung kata kunci tertentu
-Logging perubahan nama file
-Docker Implementation
+**Docker Implementation**
 
 Docker setup menggunakan:
 ```c
