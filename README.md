@@ -809,7 +809,117 @@ Function diatas digunakan untuk melakukan logging ke file **activity.log**, dima
 
 **Penjelasan**
 
+Dalam soal ini, kita mengimplementasikan sistem filesystem menggunakan FUSE (Filesystem in Userspace) dengan beberapa fitur khusus. 
+Function ini menangani path resolution dengan menggabungkan base folder dan path yang diminta.
+
+1. **Struktur File**
+- Base folder: `/it24_host`
+- Log file: `/var/log/it24.log`
+
+2. **Implementasi File Operations**
+
+a. **Base Configuration**
+```c
+#define BASE_FOLDER "/it24_host"
+#define LOG_FILE "/var/log/it24.log"
+
+static struct fuse_operations xmp_oper = {
+    .getattr = xmp_getattr,
+    .readdir = xmp_readdir,
+    .read = xmp_read,
+};
+
+b. **Main Helper Functions**
+```c
+char *getpath(const char *path) {
+    char *fpath = malloc(strlen(BASE_FOLDER) + strlen(path) + 2);
+    if (fpath == NULL) return NULL;
+    sprintf(fpath, "%s/%s", BASE_FOLDER, path[0] == '/' ? path + 1 : path);
+    return fpath;
+}
+```
+
+Lalu ditambahkan function reverse name operation, function ini melakukan reverse pada nama file. Program mendeteksi file yang mengandung kata kunci "kimcun" atau "nafis" lalu nama file akan di-reverse. Lalu untuk yg file tidak berbahaya (selain kimcun dan nafis) isi file akan dienkripsi menggunakan ROT13
+c. **Reverse Name Operation**
+```c
+char *reverse_name(const char *name) {
+    int len = strlen(name);
+    char *reversed_name = malloc(len + 1);
+    if (reversed_name == NULL) return NULL;
+    for (int i = 0; i < len; i++) {
+        reversed_name[i] = name[len - i - 1];
+    }
+    reversed_name[len] = '\0';
+    return reversed_name;
+}
+```
+Lalu pada soal juga diminta untuk menambahkan logging system sehingga ditambahkan function logging system. Dimana system logging dengan timestamp untuk tracking operasi filesystem. Setiap operasi pada file dicatat dalam log.
+d. **Logging System**
+```c
+void logger(const char *message) {
+    FILE *fp = fopen(LOG_FILE, "a");
+    if (fp == NULL) return;
+    char time_str[32];
+    time_t now = time(NULL);
+    struct tm *tm_info = localtime(&now);
+    strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S", tm_info);
+    fprintf(fp, "[%s] %s\n", time_str, message);
+    fclose(fp);
+}
+```
+
+3. File Operations
+
+a. File Encryption
+
+Menggunakan ROT13 untuk file yang mengandung "kimcun" atau "nafis"
+
+Implementasi pada fungsi read:
+```c
+if (buf[i] >= 'a' && buf[i] <= 'z') {
+    buf[i] = (buf[i] - 'a' + 13) % 26 + 'a';
+} else if (buf[i] >= 'A' && buf[i] <= 'Z') {
+    buf[i] = (buf[i] - 'A' + 13) % 26 + 'A';
+}
+```
+
+b. File Name Reversing
+
+Membalik nama file yang mengandung kata kunci tertentu
+Logging perubahan nama file
+Docker Implementation
+
+Docker setup menggunakan:
+```c
+FROM ubuntu:22.04
+RUN apt update && \
+    apt install -y libfuse* pkg-config gcc
+```
+
+Docker Compose Configuration:
+```c
+services:
+  antink-server:
+    container_name: antink-server
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ./it24_host:/it24_host
+      - ./antink-logs/:/var/log/
+```
+
 **Output**
+
+1. Menjalankan FUSE menggunakan Docker dalam container terisolasi.
+
+2. Membalikkan nama kimcun.txt dan nafis.txt dan mencatatatnya kedalam log.
+
+3. Melakukan enkripsi isi dari file teks normal menggunakan ROT13 saat dibaca, sedangkan file teks berbahaya tidak di enkripsi.
+
+4. Mencatat semua aktivitas ke dalam log file /var/log/it24.log yang dimonitor secara real-time oleh container logger.
+
+5. Perubahan hanya terjadi di container tidak berpengaruh ke host.
 
 ### Soal 4
 
