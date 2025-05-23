@@ -849,6 +849,7 @@ int main(int argc, char *argv[]) {
 ```
 
 b. **Path Functions** 
+
 Karena file sebenarnya berada di folder /it24_host, setiap path yang masuk dari FUSE perlu dikonversi menjadi path absolut ke direktori tersebut. Inilah yang dilakukan fungsi getpath:
 ```c
 char *getpath(const char *path) {
@@ -886,6 +887,7 @@ logger(message);
 
 
 b. Membaca file dan melakukan ROT13 jika tidak berbahaya
+
 Pada fungsi xmp_read, pertama-tama sistem akan mendeteksi apakah nama file telah dibalik di direktori mount. Jika ya, maka sistem akan mengembalikannya ke bentuk asli untuk dibuka.
 ```c
 char *last_slash = strrchr(path, '/');
